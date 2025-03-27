@@ -30,6 +30,8 @@ from absl import logging
 from android_world import registry
 from android_world.agents import infer
 from android_world.agents import t3a
+from android_world.agents import mobile_agent_e_w_m3a_perception
+from android_world.agents import m3a
 from android_world.env import env_launcher
 from android_world.task_evals import task_eval
 
@@ -104,11 +106,17 @@ def _main() -> None:
   params = task_type.generate_random_params()
   task = task_type(params)
   task.initialize_task(env)
-  agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
+  # agent = mobile_agent_e_w_m3a_perception.MobileAgentE_M3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
+  agent = mobile_agent_e_w_m3a_perception.MobileAgentE_M3A(env, infer.Gpt4Wrapper('gpt-4o-2024-11-20'))
+  agent.reset()
+  # agent = m3a.M3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
+  # agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
+  # agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
 
   print('Goal: ' + str(task.goal))
   is_done = False
-  for _ in range(task.complexity * 10):
+
+  for _ in range(int(task.complexity * 10)):
     response = agent.step(task.goal)
     if response.done:
       is_done = True

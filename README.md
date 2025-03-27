@@ -48,9 +48,16 @@ See demo videos on our [website](https://google-research.github.io/android_world
 
 1. [Optional] It's recommended to use `conda`, which you can download [here](https://docs.anaconda.com/free/miniconda/miniconda-install/).
 
-    ```
+    <!-- ```
     conda create -n android_world python=3.11.8
     conda activate android_world
+    ``` -->
+    
+    ```
+    conda create -n android_world python=3.11.9
+    conda activate android_world
+    pip install cmake
+    pip install dm-tree
     ```
 
 1. Install the latest [AndroidEnv](https://github.com/google-deepmind/android_env):

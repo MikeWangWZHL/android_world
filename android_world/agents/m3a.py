@@ -404,6 +404,8 @@ class M3A(base_agent.EnvironmentInteractingAgent):
         )
     step_data['before_screenshot_with_som'] = before_screenshot.copy()
 
+    import pdb; pdb.set_trace()
+
     action_prompt = _action_selection_prompt(
         goal,
         [
@@ -421,6 +423,8 @@ class M3A(base_agent.EnvironmentInteractingAgent):
             before_screenshot,
         ],
     )
+
+    import pdb; pdb.set_trace()
 
     if is_safe == False:  # pylint: disable=singleton-comparison
       #  is_safe could be None
@@ -452,6 +456,9 @@ Action: {{"action_type": "status", "goal_status": "infeasible"}}"""
     print('Action: ' + action)
     print('Reason: ' + reason)
     step_data['action_reason'] = reason
+
+    import pdb; pdb.set_trace()
+
 
     try:
       converted_action = json_action.JSONAction(
@@ -502,6 +509,8 @@ Action: {{"action_type": "status", "goal_status": "infeasible"}}"""
           orientation,
       )
 
+    import pdb; pdb.set_trace()
+
     if converted_action.action_type == 'status':
       if converted_action.goal_status == 'infeasible':
         print('Agent stopped since it thinks mission impossible.')
@@ -531,6 +540,8 @@ Action: {{"action_type": "status", "goal_status": "infeasible"}}"""
 
     time.sleep(self.wait_after_action_seconds)
 
+    import pdb; pdb.set_trace()
+
     state = self.env.get_state(wait_to_stabilize=False)
     logical_screen_size = self.env.logical_screen_size
     orientation = self.env.orientation
@@ -556,6 +567,8 @@ Action: {{"action_type": "status", "goal_status": "infeasible"}}"""
     )
     m3a_utils.add_screenshot_label(after_screenshot, 'after')
     step_data['after_screenshot_with_som'] = after_screenshot.copy()
+
+    import pdb; pdb.set_trace()
 
     summary_prompt = _summarize_prompt(
         action,
@@ -591,12 +604,16 @@ Action: {{"action_type": "status", "goal_status": "infeasible"}}"""
           step_data,
       )
 
+
     step_data['summary_prompt'] = summary_prompt
     step_data['summary'] = f'Action selected: {action}. {summary}'
     print('Summary: ' + summary)
     step_data['summary_raw_response'] = raw_response
 
     self.history.append(step_data)
+    
+    import pdb; pdb.set_trace()
+
     return base_agent.AgentInteractionResult(
         False,
         step_data,

@@ -632,7 +632,7 @@ class VlcApp(AppSetup):
 
   videos_path = "/storage/emulated/0/VLCVideos"  # Store videos here.
   apk_names = (
-      "org.videolan.vlc_13050408.apk",
+      # "org.videolan.vlc_13050408.apk",
       "org.videolan.vlc_13050407.apk",  # Arch86 for Mac M1/M2/etc.
   )
   app_name = "vlc"
