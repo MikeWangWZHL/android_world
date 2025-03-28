@@ -36,6 +36,7 @@ from android_world.agents import m3a
 from android_world.agents import random_agent
 from android_world.agents import seeact
 from android_world.agents import t3a
+from android_world.agents import mobile_agent_e_w_m3a_perception
 from android_world.env import env_launcher
 from android_world.env import interface
 
@@ -172,15 +173,22 @@ def _get_agent(
     )
   # GPT.
   elif _AGENT_NAME.value == 't3a_gpt4':
-    agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
+    # agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
+    agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
   elif _AGENT_NAME.value == 'm3a_gpt4v':
     agent = m3a.M3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
   # SeeAct.
   elif _AGENT_NAME.value == 'seeact':
     agent = seeact.SeeAct(env)
+  # Mobile Agent E.
+  elif _AGENT_NAME.value == 'mobile_agent_e_gpt4o':
+    agent = mobile_agent_e_w_m3a_perception.MobileAgentE_M3A(env, infer.Gpt4Wrapper('gpt-4o-2024-11-20'))
 
   if not agent:
     raise ValueError(f'Unknown agent: {_AGENT_NAME.value}')
+
+  if _AGENT_NAME.value == 'mobile_agent_e_gpt4o':
+    assert not family.startswith('miniwob'), 'MiniWoB agent not implemented for Mobile-Agent-E.'
 
   if (
       agent.name in ['M3A', 'T3A', 'SeeAct']
@@ -215,6 +223,7 @@ def _main() -> None:
   suite.suite_family = _SUITE_FAMILY.value
 
   agent = _get_agent(env, _SUITE_FAMILY.value)
+  print("Agent:", agent)
 
   if _SUITE_FAMILY.value.startswith('miniwob'):
     # MiniWoB pages change quickly, don't need to wait for screen to stabilize.

@@ -23,3 +23,8 @@ poetry.lock
 
 # PyCharm
 .idea
+
+checkpoints
+logs
+results
+screenshots

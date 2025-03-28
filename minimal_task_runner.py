@@ -108,7 +108,7 @@ def _main() -> None:
   task.initialize_task(env)
   # agent = mobile_agent_e_w_m3a_perception.MobileAgentE_M3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
   agent = mobile_agent_e_w_m3a_perception.MobileAgentE_M3A(env, infer.Gpt4Wrapper('gpt-4o-2024-11-20'))
-  agent.reset()
+  # agent.reset()
   # agent = m3a.M3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
   # agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
   # agent = t3a.T3A(env, infer.Gpt4Wrapper('gpt-4o-mini'))
@@ -121,6 +121,10 @@ def _main() -> None:
     if response.done:
       is_done = True
       break
+    # import pdb; pdb.set_trace()
+    # print(env.interaction_cache)
+  import pdb; pdb.set_trace()
+  print(env.interaction_cache)
   agent_successful = is_done and task.is_successful(env) == 1
   print(
       f'{"Task Successful ✅" if agent_successful else "Task Failed ❌"};'

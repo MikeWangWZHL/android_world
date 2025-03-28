@@ -24,6 +24,20 @@ from android_world.env import json_action
 from android_world.env import representation_utils
 
 
+import copy
+import json
+from android_world.agents.mobile_agent_e_w_m3a_perception_agents import (
+  InfoPool, 
+  Manager, 
+  Executor, 
+  Notetaker, 
+  ActionReflector,
+  ALL_APPS
+)
+from dataclasses import dataclass, field, asdict
+from PIL import Image
+
+
 # INIT_TIPS = (
 #     'Here are some useful guidelines you need to follow:\n'
 #     'General:\n'
@@ -93,16 +107,25 @@ from android_world.env import representation_utils
 #     ' in the list.\n'
 # )
 
+
+all_apps_str = ""
+for app_str in ALL_APPS:
+  all_apps_str += f"  - {app_str}\n"
+
 INIT_TIPS = (
     'General:\n'
+    '- If a previous action fails and the screen does not change, simply try again first.\n'
+    '- For any pop-up window, such as a permission request, you need to close it (e.g., by clicking `Don\'t Allow` or `Accept & continue`) before proceeding. Never choose to add any account or log in.`\n'
     '- For requests that are questions (or chat messages), remember to use'
     ' the `answer` action to reply to user explicitly before finish!\n'
     '- If the desired state is already achieved (e.g., enabling Wi-Fi when'
-    " it's already on), you can just complete the task.\n"
+    " it's already on), you can just complete the task.\n\n"
     'Action Related:\n'
     '- Use the `open_app` action whenever you want to open an app'
     ' (nothing will happen if the app is not installed), do not use the'
-    ' app drawer to open an app unless all other ways have failed.\n'
+    ' app drawer to open an app unless all other ways have failed.'
+    ' ALL avaliable apps are listed as follows, please use the exact names (in lowercase) as argument for the `open_app` action.\n'
+    f'{all_apps_str}'
     '- Use the `input_text` action whenever you want to type'
     ' something (including password) instead of clicking characters on the'
     ' keyboard one by one. Sometimes there is some default text in the text'
@@ -112,13 +135,14 @@ INIT_TIPS = (
     ' list given to you (some elements in the list may NOT be visible on'
     ' the screen so you can not interact with them).\n'
     '- Consider exploring the screen by using the `scroll`'
-    ' action with different directions to reveal additional content.\n'
+    ' action with different directions to reveal additional content. Or use search to quickly find a specific entry, if applicable.\n'
     '- The direction parameter for the `scroll` action can be confusing'
     " sometimes as it's opposite to swipe, for example, to view content at the"
     ' bottom, the `scroll` direction should be set to "down". It has been'
     ' observed that you have difficulties in choosing the correct direction, so'
-    ' if one does not work, try the opposite as well.\n'
+    ' if one does not work, try the opposite as well.\n\n'
     'Text Related Operations:\n'
+    '- When asked to save a file with a specific name, you can usually edit the name in the final step. For example, you can first record an audio clip then save it with a specific name.\n'
     '- Normally to select certain text on the screen: <i> Enter text selection'
     ' mode by long pressing the area where the text is, then some of the words'
     ' near the long press point will be selected (highlighted with two pointers'
@@ -145,8 +169,8 @@ INIT_TIPS = (
     '- When typing into a text field, sometimes an auto-complete dropdown'
     ' list will appear. This usually indicating this is a enum field and you'
     ' should try to select the best match by clicking the corresponding one'
-    ' in the list.\n'
-)
+    ' in the list.\n\n'
+) 
 
 def _generate_ui_element_description(
     ui_element: representation_utils.UIElement, index: int
@@ -213,17 +237,10 @@ def _generate_ui_elements_description_list(
   return tree_info
 
 
-import copy
-import json
-from android_world.agents.mobile_agent_e_w_m3a_perception_agents import (
-  InfoPool, 
-  Manager, 
-  Executor, 
-  Notetaker, 
-  ActionReflector
-)
-from dataclasses import dataclass, field, asdict
-from PIL import Image
+from datetime import datetime
+import os
+from android_world.env import adb_utils
+from android_world.env import tools
 
 class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
   """Mobile Agent E wrapper for Android World."""
@@ -233,7 +250,7 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
       env: interface.AsyncEnv,
       llm: infer.MultimodalLlmWrapper,
       name: str = 'MobileAgentE_M3A',
-      wait_after_action_seconds: float = 2.0,
+      wait_after_action_seconds: float = 3.0,
   ):
     """Initializes a MobileAgentE_M3A Agent.
 
@@ -257,6 +274,51 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
       additional_knowledge=copy.deepcopy(INIT_TIPS),
       err_to_manager_thresh=2
     )
+    
+    now = datetime.now()
+    time_str = now.strftime("%Y%m%d_%H%M%S")
+    self.save_log_dir = f"logs/{time_str}"
+    os.makedirs(os.path.join(self.save_log_dir, "screenshots"), exist_ok=True)
+
+  def initialize_chrome(self):
+    print("Running additional chrome initialization...")
+    # handle chrome initialization problem for browser tasks
+    adb_utils.launch_app("chrome", self.env.controller)
+    time.sleep(5)
+    
+    # # do get state 2 times
+    # for _ in range(2):
+    #   state = self.env.get_state(wait_to_stabilize=True)
+    #   logical_screen_size = self.env.logical_screen_size
+    #   before_ui_elements = state.ui_elements
+    #   before_ui_elements_list = _generate_ui_elements_description_list(
+    #       before_ui_elements, logical_screen_size
+    #   )
+    # time.sleep(2)
+
+    tool_controller = tools.AndroidToolController(env=self.env.controller)
+    time.sleep(2)
+
+    first_op = False
+    try:
+      print("try first variant...")
+      tool_controller.click_element("Use without an account")
+      time.sleep(5.0)
+      first_op = True
+    except:
+      print("Failed to click 'Use without an account' button.")
+      pass
+    
+    if not first_op:
+      print("try second variant...")
+      tool_controller.click_element("Accept & continue")
+      time.sleep(3.0)
+      tool_controller.click_element("No thanks")
+      time.sleep(5.0)
+      
+    adb_utils.press_home_button(self.env.controller)
+    time.sleep(2.0)
+    print("Done additional chrome initialization")
 
   def set_task_guidelines(self, task_guidelines: list[str]) -> None:
     self.additional_guidelines = task_guidelines
@@ -272,6 +334,24 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
       err_to_manager_thresh=2
     )
 
+    now = datetime.now()
+    time_str = now.strftime("%Y%m%d_%H%M%S")
+    self.save_log_dir = f"logs/{time_str}"
+    os.makedirs(os.path.join(self.save_log_dir, "screenshots"), exist_ok=True)
+
+  def save_log(self, screenshot, step_idx, screenshot_name=None):
+    """Save the logs to the specified directory."""
+    # Save the info pool to a JSON file
+    with open(os.path.join(self.save_log_dir, "info_pool.json"), "w") as f:
+      json.dump(asdict(self.info_pool), f, indent=4)
+    
+    # Save the screenshots
+    if screenshot_name is None:
+      screenshot_name = f"{step_idx}_screenshot.png"
+    Image.fromarray(screenshot).save(os.path.join(self.save_log_dir, "screenshots", screenshot_name))
+    
+    print(f"Logs saved to {self.save_log_dir}")
+
   def step(self, goal: str) -> base_agent.AgentInteractionResult:
     ## init agents ## 
     manager = Manager()
@@ -283,6 +363,10 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
     step_idx = len(self.info_pool.action_history)
 
     print('----------step ' + str(step_idx + 1))
+    
+    # fix chrome initialization problem
+    if step_idx == 0 and "chrome" in goal.lower():
+      self.initialize_chrome()
 
     ## perception ###
     state = self.get_post_transition_state()
@@ -310,7 +394,8 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
 
     self.info_pool.ui_elements_list_before = before_ui_elements_list
     
-
+    if step_idx == 0:
+      self.save_log(before_screenshot_with_som, step_idx, "init.png")
     
     ###############
     ### manager ###
@@ -330,8 +415,8 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
           self.info_pool.error_flag_plan = True
 
 
-    ## if previous action is invalid, skip the manager and try again first ##
     skip_manager = False
+    ## if previous action is invalid, skip the manager and try again first ##
     if not self.info_pool.error_flag_plan and len(self.info_pool.action_history) > 0:
       if self.info_pool.action_history[-1]['action_type'] == 'invalid':
         skip_manager = True
@@ -351,13 +436,13 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
       if not raw_response:
         raise RuntimeError('Error calling LLM in planning phase.')
       
-      print('Planning prompt: ' + prompt_planning)
-      print()
+      # print('Planning prompt: ' + prompt_planning)
+      # print()
       print('Plan: ' + self.info_pool.plan)
       print('Current subgoal: ' + self.info_pool.current_subgoal)
       print('Planning thought: ' + parsed_result_planning['thought'], "\n")
-      Image.fromarray(raw_screenshot).save("screenshots/manager_input.png")
-      import pdb; pdb.set_trace()
+      # Image.fromarray(raw_screenshot).save("screenshots/manager_input.png")
+      # import pdb; pdb.set_trace()
 
 
     ## if stopping by planner ##
@@ -404,18 +489,19 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
         self.info_pool.summary_history.append(action_description)
         self.info_pool.action_outcomes.append("C") # no change
         self.info_pool.error_descriptions.append("invalid action format, do nothing.")
+        self.save_log(before_screenshot_with_som, step_idx, f"{step_idx}_invalid_action.png")
         return base_agent.AgentInteractionResult(
             False,
             asdict(self.info_pool),
         )
-      print("Prompt: " + prompt_action)
-      print()
+      # print("Prompt: " + prompt_action)
+      # print()
     
     print('Thought: ' + action_thought)
     print('Action: ' + action_object_str)
     print('Action description: ' + action_description)
-    Image.fromarray(before_screenshot_with_som).save("screenshots/operator_input.png")
-    import pdb; pdb.set_trace()
+    # Image.fromarray(before_screenshot_with_som).save("screenshots/operator_input.png")
+    # import pdb; pdb.set_trace()
 
     ## parse action ##
     try:
@@ -430,6 +516,7 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
       self.info_pool.summary_history.append(action_description)
       self.info_pool.action_outcomes.append("C") # no change
       self.info_pool.error_descriptions.append("invalid action format, do nothing.")
+      self.save_log(before_screenshot_with_som, step_idx, f"{step_idx}_invalid_action.png")
       return base_agent.AgentInteractionResult(
           False,
           asdict(self.info_pool),
@@ -453,6 +540,7 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
         self.info_pool.summary_history.append(action_description)
         self.info_pool.action_outcomes.append("C") # no change
         self.info_pool.error_descriptions.append(f"invalid action due to UI element index out of range: got {action_index}, expected < {num_ui_elements}; do nothing.")
+        self.save_log(before_screenshot_with_som, step_idx, f"{step_idx}_invalid_action.png")
         return base_agent.AgentInteractionResult(
             False,
             asdict(self.info_pool),
@@ -480,6 +568,7 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
       self.info_pool.summary_history.append(action_description)
       self.info_pool.action_outcomes.append(outcome) # no change
       self.info_pool.error_descriptions.append(error_description)
+      self.save_log(before_screenshot_with_som, step_idx, f"{step_idx}_finish.png")
       return base_agent.AgentInteractionResult(
           True,
           asdict(self.info_pool),
@@ -487,6 +576,9 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
 
     if converted_action.action_type == 'answer':
       print('Agent answered with: ' + converted_action.text)
+    
+    if converted_action.action_type == 'open_app':
+      converted_action.app_name = converted_action.app_name.lower().strip()
 
     ## try execute action ##
     try:
@@ -503,6 +595,7 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
         self.info_pool.error_descriptions.append(f"Failed to open the app '{app_name}'; the app name might not exist.")
       else:
         self.info_pool.error_descriptions.append(f"Failed to execute the action: {converted_action}")
+      self.save_log(before_screenshot_with_som, step_idx, f"{step_idx}_invalid_execution.png")
       return base_agent.AgentInteractionResult(
           False,
           asdict(self.info_pool),
@@ -571,19 +664,21 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
           action_outcome = "C"
       else:
           raise ValueError("Invalid outcome:", outcome)
-    else:
-      outcome = "A"
-      error_description = "None"
-      progress_status = self.info_pool.progress_status + "\n" + "Answer to the request: " + converted_action.text
+      
+      # print('Action reflection prompt: ' + prompt_action_reflect)
+      # print()
     
-    print('Action reflection prompt: ' + prompt_action_reflect)
-    print()
+    else:
+      action_outcome = "A"
+      error_description = "None"
+      progress_status = self.info_pool.progress_status + "\n" + "The `answer` action has been performed. Answer to the question: " + converted_action.text
+    
     print('Action reflection outcome: ' + action_outcome)
     print('Action reflection error description: ' + error_description)
     print('Action reflection progress status: ' + progress_status, "\n")
-    Image.fromarray(before_screenshot_with_som).save("screenshots/action_reflection_input_before.png")
-    Image.fromarray(after_screenshot_with_som).save("screenshots/action_reflection_input_after.png")
-    import pdb; pdb.set_trace()
+    # Image.fromarray(before_screenshot_with_som).save("screenshots/action_reflection_input_before.png")
+    # Image.fromarray(after_screenshot_with_som).save("screenshots/action_reflection_input_after.png")
+    # import pdb; pdb.set_trace()
 
     # update action history
     self.info_pool.action_history.append(json.loads(converted_action.json_str()))
@@ -597,7 +692,7 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
     #################
     ### NoteKeeper ###
     #################
-    if action_outcome == "A":
+    if action_outcome == "A" and converted_action.action_type != 'answer':
         print("\n### NoteKeeper ... ###\n")
         # if previous action is successful, record the important content
         notetaking_start_time = time.time()
@@ -611,13 +706,23 @@ class MobileAgentE_M3A(base_agent.EnvironmentInteractingAgent):
         self.info_pool.important_notes = important_notes
         notetaking_end_time = time.time()
         
-        print('Note taking prompt: ' + prompt_note)
-        print()
+        # print('Note taking prompt: ' + prompt_note)
+        # print()
         print('Important notes: ' + important_notes, "\n")
-        Image.fromarray(after_screenshot_with_som).save("screenshots/note_taking_input.png")
-        import pdb; pdb.set_trace()
+        # Image.fromarray(after_screenshot_with_som).save("screenshots/note_taking_input.png")
+        # import pdb; pdb.set_trace()
 
-    return base_agent.AgentInteractionResult(
-        False,
-        asdict(self.info_pool),
-    )
+    action_str_for_file_name = str(converted_action).replace(" ", "_").replace("\n", "_").strip()
+    self.save_log(after_screenshot_with_som, step_idx, f"{step_idx}_{action_str_for_file_name}.png")
+    
+    if converted_action.action_type == 'answer':
+      # directly return after answer action
+      return base_agent.AgentInteractionResult(
+          True,
+          asdict(self.info_pool),
+      )
+    else:
+      return base_agent.AgentInteractionResult(
+          False,
+          asdict(self.info_pool),
+      )

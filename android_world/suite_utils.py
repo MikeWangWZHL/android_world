@@ -306,6 +306,10 @@ def _get_task_info(
   return completed, failed
 
 
+TASKS_TO_SKIP = [
+  "OsmAndTrack"
+]
+
 def _run_task_suite(
     suite: Suite,
     run_episode: Callable[[task_eval.TaskEval], episode_runner.EpisodeResult],
@@ -380,6 +384,12 @@ def _run_task_suite(
       if already_processed:
         print(f'Skipping already processed task {instance_name}')
         continue
+      
+      ### debug skip some tasks that cause emulator froze ###
+      if name in TASKS_TO_SKIP:
+        print(f'!!! Customized !!! Skipping problematic task: {instance_name}')
+        continue
+
 
       episode = _run_task(instance, run_episode, env, demo_mode=demo_mode)
       if (

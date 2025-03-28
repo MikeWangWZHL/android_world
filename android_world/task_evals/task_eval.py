@@ -116,6 +116,11 @@ class TaskEval(abc.ABC):
     for app_name in self.app_names:
       # Don't need to restore snapshot for clipper app since it doesn't have
       # any state.
+      
+      # if app_name in ["chrome", "google chrome"]:
+      #   print("skip resetting chrome to handle the permission setting")
+      #   continue
+
       if app_name and app_name != "clipper":
         try:
           app_snapshot.restore_snapshot(app_name, env.controller)

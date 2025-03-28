@@ -122,6 +122,30 @@ class BaseAgent(ABC):
         pass
 
 
+ALL_APPS = [
+"simple calendar pro: A calendar app.",
+"settings: The Android system settings app for managing device settings such as Bluetooth, Wi-Fi, and brightness.",
+"markor: A note-taking app for creating, editing, deleting, and managing notes and folders.",
+"broccoli: A recipe management app.",
+"pro expense: An expense tracking app.",
+"simple sms messenger: An SMS app for sending, replying to, and resending text messages.",
+"opentracks: A sport tracking app for recording and analyzing activities.",
+"tasks: A task management app for tracking tasks, due dates, and priorities.",
+"clock: An app with stopwatch and timer functionality.",
+"joplin: A note-taking app.",
+"retro music: A music player app.",
+"simple gallery pro: An app for viewing images.",
+"camera: An app for taking photos and videos.",
+"chrome: A web browser app.",
+"contacts: An app for managing contact information.",
+"osmand: A maps and navigation app with support for adding location markers, favorites, and saving tracks.",
+"vlc: A media player app for playing media files.",
+"audio recorder: An app for recording and saving audio clips.",
+"files: A file manager app for the Android filesystem, used for deleting and moving files.",
+"simple draw pro: A drawing app for creating and saving drawings.",
+]
+
+
 class Manager(BaseAgent):
 
     def get_prompt(self, info_pool: InfoPool) -> str:
@@ -129,10 +153,23 @@ class Manager(BaseAgent):
         prompt += "### User Request ###\n"
         prompt += f"{info_pool.instruction}\n\n"
 
+        prompt += "### All Available Apps ###\n"
+        all_apps_str = ""
+        for app_str in ALL_APPS:
+            all_apps_str += f"- {app_str}\n"
+        prompt += f"{all_apps_str}\n"
+
+        task_specific_note = ""
+        if ".html" in info_pool.instruction:
+            task_specific_note = "NOTE: The .html file may contain additional interactable elements, such as a drawing canvas or a game. Do not open other apps without completing the task in the .html file.\n"
+
         if info_pool.plan == "":
             # first time planning
             prompt += "---\n"
-            prompt += "Make a high-level plan to achieve the user's request. If the request is complex, break it down into subgoals. The screenshot displays the starting state of the phone.\n\n"
+            prompt += "Make a high-level plan to achieve the user's request. If the request is complex, break it down into subgoals. The screenshot displays the starting state of the phone.\n"
+            prompt += "IMPORTANT: For requests that explicitly require an answer, always add 'perform the `answer` action' as the last step to the plan!\n"
+            if task_specific_note != "":
+                prompt += f"{task_specific_note}\n\n"
             
             # # shortcuts
             # if info_pool.shortcuts != {}:
@@ -158,6 +195,8 @@ class Manager(BaseAgent):
             prompt += f"{info_pool.plan}\n\n"
             prompt += "### Previous Subgoal ###\n"
             prompt += f"{info_pool.current_subgoal}\n\n"
+            prompt += f"### Last Action ###\n"
+            prompt += f"{info_pool.last_action}\n\n"
             prompt += f"### Progress Status ###\n"
             prompt += f"{info_pool.progress_status}\n\n"
             prompt += "### Important Notes ###\n"
@@ -178,7 +217,10 @@ class Manager(BaseAgent):
             prompt += "---\n"
             # prompt += "The sections above provide an overview of the previous plan you are following, the current subgoal you are working on, the overall progress made, and any important notes you have recorded. The screenshot displays the current state of the phone.\n"
             prompt += "Carefully assess the current status and the provided screenshot. Check if the current plan needs to be revised.\n Determine if the task has been fully completed. If you are confident that no further actions are required, mark the task as \"Finished\" in your output. If the task is not finished, outline the next steps. If you are stuck with errors, think step by step about whether the overall plan needs to be revised to address the error.\n"
-            prompt += "NOTE: If the current situation prevents proceeding with the original plan or requires clarification from the user, make reasonable assumptions and revise the plan accordingly. Act as though you are the user in such cases.\n\n"
+            prompt += "NOTE: If the current situation prevents proceeding with the original plan or requires clarification from the user, make reasonable assumptions and revise the plan accordingly. Act as though you are the user in such cases.\n"
+            prompt += "IMPORTANT: For requests that explicitly require an answer, always add 'perform the `answer` action' as the last step to the plan! You SHOULD NOT finish such tasks unless the last `action_type` == `answer`.\n"
+            if task_specific_note != "":
+              prompt += f"{task_specific_note}\n\n"
 
             # # shortcuts
             # if info_pool.shortcuts != {}:
@@ -195,7 +237,7 @@ class Manager(BaseAgent):
             prompt += "### Plan ###\n"
             prompt += "Updated high-level plan\n\n"
             prompt += "### Current Subgoal ###\n"
-            prompt += "The next subgoal to work on. If all subgoals are completed, write \"Finished\".\n"
+            prompt += "The next subgoal to work on. If all subgoals are completed, write \"Finished\". If the user requests an answer, always remember to check whether the last `action_type` is `answer` before finishing.\n"
         return prompt
 
     def parse_response(self, response: str) -> dict:
@@ -257,6 +299,14 @@ ATOMIC_ACTION_SIGNITURES = {
 }
 
 
+GENERAL_KNOWN_ISSUES = (
+    '- When doing searching, such as in the Joplin app, sometimes the dropdown result UI elements can be shown as `is_clickable: False`. This is a bug.'
+    ' YOU SHOULD still try to click that element, even if it is not clickable. Usually the correct UI element has similar/same text as the search query, and having an index larger than 2.\n'
+)
+KNOWN_ISSUE_DRAW = (
+    '- There is currently no `draw` action. If you want to draw someting, try using the `scroll` action with the `index` argument specified to the canvas UI element, for example 10. If the canvas covers entire screen, then no need to specify `index`. Draw a simple line using `scroll` with any direction would be fine. If drawing multiple lines, it would be better to use different direction. \n'
+)
+
 class Executor(BaseAgent):
 
     def get_prompt(self, info_pool: InfoPool) -> str:
@@ -278,45 +328,24 @@ class Executor(BaseAgent):
         prompt += f"{info_pool.current_subgoal}\n\n"
 
         prompt += "### Screen Information ###\n"
-        # prompt += (
-        #     f"The attached image is a screenshot showing the current state of the phone. "
-        #     f"Its width and height are {info_pool.width} and {info_pool.height} pixels, respectively.\n"
-        # )
-        # prompt += (
-        #     "To help you better understand the content in this screenshot, we have extracted positional information for the text elements and icons, including interactive elements such as search bars. "
-        #     "The format is: (coordinates; content). The coordinates are [x, y], where x represents the horizontal pixel position (from left to right) "
-        #     "and y represents the vertical pixel position (from top to bottom)."
-        # )
-        # prompt += "The extracted information is as follows:\n"
-
-        # for clickable_info in info_pool.perception_infos_pre:
-        #     if clickable_info['text'] != "" and clickable_info['text'] != "icon: None" and clickable_info['coordinates'] != (0, 0):
-        #         prompt += f"{clickable_info['coordinates']}; {clickable_info['text']}\n"
-        # prompt += "\n"
-        # prompt += (
-        #     "Note that a search bar is often a long, rounded rectangle. If no search bar is presented and you want to perform a search, you may need to tap a search button, which is commonly represented by a magnifying glass.\n"
-        #     "Also, the information above might not be entirely accurate. "
-        #     "You should combine it with the screenshot to gain a better understanding."
-        # )
-        # prompt += "\n\n"
-        # prompt += "The current screenshot and the same screenshot with bounding boxes and labels added are also given to you. Here is a list of detailed information for some of the UI elements (notice that some elements in this list may not be visible in the current screen and so you can not interact with it, can try to scroll the screen to reveal it first), the numeric indexes are consistent with the ones in the labeled screenshot:\n"
         prompt += "The current screenshot with bounding boxes and labels added is given to you. Here is a list of detailed information for some of the UI elements (notice that some elements in this list may not be visible in the current screen and so you can not interact with it, can try to scroll the screen to reveal it first), the numeric indexes are consistent with the ones in the labeled screenshot:\n"
         prompt += info_pool.ui_elements_list_before
         prompt += "\n\n"
 
-        # prompt += "### Keyboard status ###\n"
-        # if info_pool.keyboard_pre:
-        #     prompt += "The keyboard has been activated and you can type."
-        # else:
-        #     prompt += "The keyboard has not been activated and you can\'t type."
-        # prompt += "\n\n"
 
         if info_pool.additional_knowledge != "":
-            prompt += "### Tips ###\n"
-            prompt += "From previous experience interacting with the device, you have collected the following tips that might be useful for deciding what to do next:\n"
-            prompt += f"{info_pool.additional_knowledge}\n\n"
+            prompt += "### Guidelines ###\n"
+            # prompt += "From previous experience interacting with the device, you have collected the following tips that might be useful for deciding what to do next:\n"
+            prompt += f"{info_pool.additional_knowledge}\n"
 
-        prompt += "### Important Notes ###\n"
+        if GENERAL_KNOWN_ISSUES != "":
+            prompt += "### Important Known Issues ###\n"
+            prompt += f"{GENERAL_KNOWN_ISSUES}\n"
+
+            if "draw" in info_pool.instruction:
+                prompt += f"{KNOWN_ISSUE_DRAW}\n"
+
+        prompt += "### Collected Task-Related Notes ###\n"
         if info_pool.important_notes != "":
             prompt += "Here are some potentially important content relevant to the user's request you already recorded:\n"
             prompt += f"{info_pool.important_notes}\n\n"
@@ -389,7 +418,7 @@ class Executor(BaseAgent):
         prompt += "Provide a detailed explanation of your rationale for the chosen action.\n\n"
 
         prompt += "### Action ###\n"
-        prompt += "Choose only one action or shortcut from the options provided. IMPORTANT: Do NOT return invalid actions like null or stop. Do NOT repeat previously failed actions.\n"
+        prompt += "Choose only one action or shortcut from the options provided. IMPORTANT: Do NOT return invalid actions like null or stop. Do NOT repeat previously failed actions multiple times.\n"
         # prompt += "Use shortcuts whenever possible to expedite the process, but make sure that the precondition is met.\n"
         prompt += "You must provide your decision using a valid JSON format specifying the `action_type` and the arguments of the action. For example, if you want to open an App, you should write {\"action_type\":\"open_app\", \"app_name\":<name>}. If an action does not require arguments, such as `navigate_home`, just include the `action_type` field, e.g., {\"action_type\": \"navigate_home\"}.\n\n"
         
@@ -438,11 +467,11 @@ class ActionReflector(BaseAgent):
         prompt += f"Expectation: {info_pool.last_summary}\n\n"
 
         prompt += "---\n"
-        prompt += "Carefully examine the information provided above to determine whether the last action produced the expected behavior. If the action was successful, update the progress status accordingly. If the action failed, identify the failure mode and provide reasoning on the potential reason causing this failure. Note that for the `scroll` action, it may take multiple attempts to display the expected content. Thus, for a `scroll` action, if the screen shows new content, it usually meets the expectation.\n\n"
+        prompt += "Carefully examine the information provided above to determine whether the last action produced the expected behavior. If the action was successful, update the progress status accordingly. If the action failed, identify the failure mode and provide reasoning on the potential reason causing this failure. Note that for the `scroll` action, it may take multiple attempts to display the expected content. Thus, for a `scroll` action, if the screen shows new content, it usually meets the expectation.\nPro Tip: In rare cases, the UI might not visibly change even if a click action is performed correctly — for example, when clicking on a color before drawing. In such situations, you can assume the action was successful and proceed — for example, by drawing a line.\n\n"
 
         prompt += "Provide your output in the following format containing three parts:\n\n"
         prompt += "### Outcome ###\n"
-        prompt += "Choose from the following options. Give your answer as \"A\", \"B\" or \"C\":\n"
+        prompt += "Choose from the following options. Give your response as \"A\", \"B\" or \"C\":\n"
         prompt += "A: Successful or Partially Successful. The result of the last action meets the expectation.\n"
         prompt += "B: Failed. The last action results in a wrong page. I need to return to the previous state.\n"
         prompt += "C: Failed. The last action produces no changes.\n\n"
@@ -452,6 +481,7 @@ class ActionReflector(BaseAgent):
 
         prompt += "### Progress Status ###\n"
         prompt += "If the action was successful or partially successful, update the progress status. If the action failed, copy the previous progress status.\n"
+        prompt += "IMPORTANT: For requests that require an answer, if the last `action_type` is not `answer`, add a note that an additional `answer` action is needed.\n"
 
         return prompt
 
